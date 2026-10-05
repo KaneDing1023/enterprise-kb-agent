@@ -1,40 +1,66 @@
-# 企业知识库 RAG
+# 企业知识库 RAG - 面向企业内部文档的检索增强问答平台
 
-基于 **LangChain + Chroma + 阿里云百炼 DashScope（通义千问）** 搭建的企业内部知识库问答系统。  
-上传 PDF / Word / Markdown 文档后，系统自动解析、切分、向量化入库；提问时采用**两阶段检索**  
-（向量粗排召回候选 → `gte-rerank` 交叉编码器精排），再由大模型严格依据原文作答，  
+> LangChain + Chroma + 阿里云百炼 DashScope（通义千问）· 两阶段检索 + 逐段溯源
+
+[![release](https://img.shields.io/badge/release-v0.1.0-2ea44f)](https://github.com/KaneDing1023/enterprise-kb-agent/releases)
+[![python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![langchain](https://img.shields.io/badge/LangChain-1.x-1C3C3C)](https://python.langchain.com/)
+[![chroma](https://img.shields.io/badge/Chroma-1.5-FF6B6B)](https://www.trychroma.com/)
+[![dashscope](https://img.shields.io/badge/DashScope-Qwen-615CED)](https://bailian.console.aliyun.com/)
+[![streamlit](https://img.shields.io/badge/Streamlit-1.65-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+## 简介
+
+企业知识库 RAG 是一个面向企业内部文档的**检索增强问答系统**。上传 PDF / Word / TXT / Markdown
+文档后，系统自动解析、切分、向量化入库；提问时采用**两阶段检索**
+（向量粗排召回候选 → `gte-rerank` 交叉编码器精排），再由大模型严格依据原文作答，
 并在**每段答案末尾标注引用的是哪个文件的哪一页**。
 
----
+### 整体流程
 
-## 一、依赖包清单（pip 安装）
+```mermaid
+flowchart TD
+    A["企业文档<br/>PDF / Word / TXT / MD"] --> B["解析 + 中文友好切分"]
+    B --> C[("Chroma 向量库<br/>text-embedding-v4")]
 
-```bash
-pip install -r requirements.txt
+    Q["用户提问"] --> D["① 向量粗排<br/>多召回候选片段"]
+    C -.-> D
+    D --> E["② gte-rerank 精排<br/>交叉编码器逐对打分"]
+    E --> F["③ qwen-plus 生成<br/>严格依据原文作答"]
+    F --> G["④ 逐段溯源<br/>【来源：文件（第 X 页）】"]
 ```
 
-| 包名                         | 版本要求     | 作用                                                |
-| -------------------------- | -------- | ------------------------------------------------- |
-| `langchain`                | >=0.3.0  | RAG 编排框架                                          |
-| `langchain-chroma`         | >=0.2.0  | LangChain 的 Chroma 向量库集成                          |
-| `langchain-text-splitters` | >=0.3.0  | 文本切分器（中文分隔符已适配）                                   |
-| `langchain-community`      | >=0.4.0  | 官方 DocumentLoader：PDF / TXT / DOCX 加载             |
-| `docx2txt`                 | >=0.9.0  | `Docx2txtLoader` 读取 .docx 的底层依赖                   |
-| `chromadb`                 | >=0.5.0  | 本地向量数据库（持久化到 `vector_store/`）                     |
-| `dashscope`                | >=1.20.0 | 阿里云百炼 SDK：Embedding + 通义千问 LLM + `gte-rerank` 重排序 |
-| `python-dotenv`            | >=1.0.0  | 读取 `.env` 配置                                      |
-| `pypdf`                    | >=5.0.0  | PDF 解析                                            |
-| `python-docx`              | >=1.1.0  | Word 解析                                           |
-| `streamlit`                | >=1.40.0 | Web 问答界面                                          |
+### 核心特性
 
-> 说明：Embedding、LLM 与重排序（`gte-rerank`）均直接调用 `dashscope` SDK  
-> （不经过 `langchain-community` 的 DashScope 封装），**重排序不需要额外依赖**；  
-> `langchain` 主包、`langchain-chroma` 会自动带上 `langchain-core`。  
-> `langchain-community` 仅用于官方 DocumentLoader（`PyPDFLoader` / `TextLoader` / `Docx2txtLoader`）。
+- **两阶段检索**：向量粗排先多召回候选，再用 `gte-rerank` 交叉编码器逐对打分重排，提升 Top-1 命中率。
+- **逐段溯源**：答案每段末尾自动追加 `【来源：员工手册.pdf（第 2 页）】`；
+  编号 → 文件名 / 页码的映射由系统完成，**模型无法伪造来源**。
+- **多格式入库**：PDF（保留页码）、Word、TXT / MD（自动探测编码），官方 DocumentLoader 统一加载。
+- **防幻觉三道闸**：严格提示词约束、资料不足必须拒答、空检索直接短路不调用大模型。
+- **双链路并存**：`app.py` 主链路（`text-embedding-v3` + `vector_store/`）与
+  `app_agent.py` Agent 应用（`text-embedding-v4` + `chroma_kb/`）互不干扰。
+- **健壮降级**：重排失败降级为粗排顺序不抛错；排序模型未开通时自动回退到备用模型。
+
+## 目录
+
+- [一、快速开始](#一快速开始)
+- [二、依赖包清单（pip 安装）](#二依赖包清单pip-安装)
+- [三、文档处理函数 load_and_split()](#三文档处理函数-load_and_split)
+- [四、向量知识库核心函数](#四向量知识库核心函数)
+  - [4.1 两阶段检索与重排序（gte-rerank）](#41-两阶段检索与重排序gte-rerank)
+  - [4.2 逐段溯源](#42-逐段溯源每段答案末尾标注来源文件与页码)
+  - [4.3 问答函数 kb_chat()](#43-问答函数-kb_chat)
+  - [4.4 流式问答 kb_chat_stream()](#44-流式问答-kb_chat_stream)
+  - [4.5 Agent 应用 Web 界面 app_agent.py](#45-agent-应用-web-界面-app_agentpy)
+- [五、目录结构](#五目录结构)
+- [六、配置项说明（.env）](#六配置项说明env)
+- [七、实现要点](#七实现要点)
+- [八、常见问题](#八常见问题)
 
 ---
 
-## 二、快速开始
+## 一、快速开始
 
 ```bash
 # 1. 创建并激活虚拟环境
@@ -75,6 +101,33 @@ python src/kb.py --chat "年假有多少天？"          # 知识库场景问答
 python tests/test_smoke.py                   # 冒烟测试（不消耗 API 额度）
 python tests/test_kb.py                      # 知识库函数测试（不消耗 API 额度）
 ```
+
+---
+
+## 二、依赖包清单（pip 安装）
+
+```bash
+pip install -r requirements.txt
+```
+
+| 包名                         | 版本要求     | 作用                                                |
+| -------------------------- | -------- | ------------------------------------------------- |
+| `langchain`                | >=0.3.0  | RAG 编排框架                                          |
+| `langchain-chroma`         | >=0.2.0  | LangChain 的 Chroma 向量库集成                          |
+| `langchain-text-splitters` | >=0.3.0  | 文本切分器（中文分隔符已适配）                                   |
+| `langchain-community`      | >=0.4.0  | 官方 DocumentLoader：PDF / TXT / DOCX 加载             |
+| `docx2txt`                 | >=0.9.0  | `Docx2txtLoader` 读取 .docx 的底层依赖                   |
+| `chromadb`                 | >=0.5.0  | 本地向量数据库（持久化到 `vector_store/`）                     |
+| `dashscope`                | >=1.20.0 | 阿里云百炼 SDK：Embedding + 通义千问 LLM + `gte-rerank` 重排序 |
+| `python-dotenv`            | >=1.0.0  | 读取 `.env` 配置                                      |
+| `pypdf`                    | >=5.0.0  | PDF 解析                                            |
+| `python-docx`              | >=1.1.0  | Word 解析                                           |
+| `streamlit`                | >=1.40.0 | Web 问答界面                                          |
+
+> 说明：Embedding、LLM 与重排序（`gte-rerank`）均直接调用 `dashscope` SDK  
+> （不经过 `langchain-community` 的 DashScope 封装），**重排序不需要额外依赖**；  
+> `langchain` 主包、`langchain-chroma` 会自动带上 `langchain-core`。  
+> `langchain-community` 仅用于官方 DocumentLoader（`PyPDFLoader` / `TextLoader` / `Docx2txtLoader`）。
 
 ---
 
@@ -120,7 +173,9 @@ python src/doc_processor.py data/raw/员工手册.pdf
 
 ---
 
-## 四、向量知识库核心函数 `add_docs_to_db()` / `search_from_db()` / `kb_chat()`
+## 四、向量知识库核心函数
+
+> `src/kb.py` 对外暴露 `add_docs_to_db()` / `search_from_db()` / `kb_chat()` / `kb_chat_stream()`
 
 `src/kb.py` 封装了「百炼 `text-embedding-v4` + Chroma 本地持久化 + `gte-rerank` 两阶段检索」的  
 知识库读写与问答，对外暴露四个核心函数，向量数据落盘在 `./chroma_kb`：
@@ -385,6 +440,7 @@ streamlit run app_agent.py      # 打开 http://localhost:8501
 ├── .env.example              # 环境变量模板，随代码一起提交
 ├── .gitignore
 ├── requirements.txt          # 依赖清单
+├── LICENSE                   # MIT 许可证
 ├── README.md
 ├── config.py                 # 全局配置：统一从 .env 读取
 ├── app.py                    # Streamlit 入口 · 主链路（上传 / 入库 / 问答）
