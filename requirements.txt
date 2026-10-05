@@ -1,0 +1,32 @@
+# ============================================================
+# 企业知识库 RAG —— Python 依赖清单
+# 安装：pip install -r requirements.txt
+# 建议 Python >= 3.10（本项目已在 3.13 上验证）
+# ============================================================
+
+# --- LLM / RAG 编排 ---
+langchain>=0.3.0
+langchain-chroma>=0.2.0
+langchain-text-splitters>=0.3.0
+
+# --- 官方 DocumentLoader（PDF / TXT / DOCX 统一加载）---
+# PyPDFLoader / TextLoader / Docx2txtLoader 都在这个包里
+langchain-community>=0.4.0
+docx2txt>=0.9.0         # Docx2txtLoader 读取 .docx 的底层依赖
+
+# --- 向量数据库（持久化到 ./vector_store）---
+chromadb>=0.5.0
+
+# --- 阿里云百炼 DashScope：Embedding + 通义千问 LLM + gte-rerank 重排序 ---
+# TextEmbedding / Generation / TextReRank（gte-rerank）都在这个 SDK 里，重排序无需额外依赖
+dashscope>=1.20.0
+
+# --- 配置管理（读取 .env）---
+python-dotenv>=1.0.0
+
+# --- 文档解析 ---
+pypdf>=5.0.0            # PDF
+python-docx>=1.1.0      # DOCX
+
+# --- 前端界面 ---
+streamlit>=1.40.0
