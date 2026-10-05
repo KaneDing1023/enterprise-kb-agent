@@ -49,3 +49,10 @@
   也可用 `CHROMA_KB_DIR` / `KB_COLLECTION_NAME` 环境变量指向临时库）。
 - `tests/test_kb.py` 里的 `search()` / `chat()` / `chat_stream()` 测试入口**默认 rerank=False**，
   需要验证重排的用例显式传 `rerank=True` + `patched_reranker(FakeReranker())`，避免单元测试触发真实调用。
+
+## 仓库与文档约定
+- 远程仓库：https://github.com/KaneDing1023/enterprise-kb-agent （私人）。GitHub 账号 `KaneDing1023`。
+  Git Bash 里用 `gh` 需先 `export PATH="$PATH:/c/Program Files/GitHub CLI"`。
+- **README 徽章一律用静态徽章**（`img.shields.io/badge/...`），私人仓库读不到 GitHub API，
+  动态徽章（`github/v/release/...`）会挂；发布新版后记得手动同步 release 徽章里的版本号。
+- README 目录的锚点改动后必须重新校验（标题里不要放反引号 / 斜杠 / 括号，锚点会变长导致链接失效）。
